@@ -1,6 +1,8 @@
 import json
 import traceback
 from typing import Any, Dict, ForwardRef, List, Optional, Type, Union
+
+from anyio import ClosedResourceError
 import logging
 from fastapi import HTTPException
 
@@ -315,6 +317,14 @@ def get_tool_handler(
                             else {"message": e.error.message}
                         ),
                     )
+                except ClosedResourceError:
+                    logger.warning(
+                        f"MCP connection closed while calling {endpoint_name}"
+                    )
+                    raise HTTPException(
+                        status_code=503,
+                        detail={"message": "MCP server connection closed"},
+                    )
                 except Exception as e:
                     logger.info(
                         f"Unexpected error calling {endpoint_name}: {traceback.format_exc()}"
@@ -369,6 +379,14 @@ def get_tool_handler(
                             if e.error.data is not None
                             else {"message": e.error.message}
                         ),
+                    )
+                except ClosedResourceError:
+                    logger.warning(
+                        f"MCP connection closed while calling {endpoint_name}"
+                    )
+                    raise HTTPException(
+                        status_code=503,
+                        detail={"message": "MCP server connection closed"},
                     )
                 except Exception as e:
                     logger.info(
