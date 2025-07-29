@@ -1,8 +1,9 @@
 import json
 import traceback
 from typing import Any, Dict, ForwardRef, List, Optional, Type, Union
+
 import logging
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
 from mcp import ClientSession, types
 from mcp.types import (
@@ -15,6 +16,8 @@ from mcp.types import (
 )
 
 from mcp.shared.exceptions import McpError
+
+from mcpo.utils.context import closed_resource_handler
 
 from pydantic import Field, create_model
 from pydantic.fields import FieldInfo
@@ -276,9 +279,17 @@ def get_tool_handler(
         def make_endpoint_func(
             endpoint_name: str, FormModel, session: ClientSession
         ):  # Parameterized endpoint
-            async def tool(form_data: FormModel) -> Union[ResponseModel, Any]:
+            @closed_resource_handler(endpoint_name)
+            async def tool(
+                form_data: FormModel, request: Request
+            ) -> Union[ResponseModel, Any]:
                 args = form_data.model_dump(exclude_none=True, by_alias=True)
-                logger.info(f"Calling endpoint: {endpoint_name}, with args: {args}")
+                request_id = getattr(request.state, "request_id", "unknown")
+                user = getattr(request.state, "user", "anonymous")
+                logger.info(
+                    f"Calling endpoint: {endpoint_name}, with args: {args} "
+                    f"(request_id={request_id}, user={user})"
+                )
                 try:
                     result = await session.call_tool(endpoint_name, arguments=args)
 
@@ -332,8 +343,14 @@ def get_tool_handler(
         def make_endpoint_func_no_args(
             endpoint_name: str, session: ClientSession
         ):  # Parameterless endpoint
-            async def tool():  # No parameters
-                logger.info(f"Calling endpoint: {endpoint_name}, with no args")
+            @closed_resource_handler(endpoint_name)
+            async def tool(request: Request):  # No parameters
+                request_id = getattr(request.state, "request_id", "unknown")
+                user = getattr(request.state, "user", "anonymous")
+                logger.info(
+                    f"Calling endpoint: {endpoint_name}, with no args "
+                    f"(request_id={request_id}, user={user})"
+                )
                 try:
                     result = await session.call_tool(
                         endpoint_name, arguments={}
