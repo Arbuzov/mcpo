@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 from mcpo.utils.main import get_model_fields, get_tool_handler
 from mcpo.utils.auth import get_verify_api_key, APIKeyMiddleware
+from mcpo.utils.context import RequestContextMiddleware
 
 
 async def create_dynamic_endpoints(app: FastAPI, api_dependency=None):
@@ -213,6 +214,7 @@ async def run(
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    main_app.add_middleware(RequestContextMiddleware)
 
     # Add middleware to protect also documentation and spec
     if api_key and strict_auth:
@@ -310,6 +312,7 @@ async def run(
                 allow_methods=["*"],
                 allow_headers=["*"],
             )
+            sub_app.add_middleware(RequestContextMiddleware)
 
             if server_cfg.get("command"):
                 # stdio
@@ -370,4 +373,4 @@ async def run(
     except asyncio.CancelledError:
         server.should_exit = True
         await server.shutdown()
-        raise 
+        raise
