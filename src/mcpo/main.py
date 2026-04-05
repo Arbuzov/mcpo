@@ -7,7 +7,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Optional
 
 import uvicorn
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.sse import sse_client
@@ -206,6 +206,46 @@ async def run(
         ssl_keyfile=ssl_keyfile,
         lifespan=lifespan,
     )
+
+    @main_app.get("/healthz", include_in_schema=False)
+    async def healthz():
+        mounted_apps = [
+            route.app
+            for route in main_app.routes
+            if isinstance(route, Mount) and isinstance(route.app, FastAPI)
+        ]
+
+        # config_path mode: check every mounted MCP sub-app
+        if mounted_apps:
+            for sub_app in mounted_apps:
+                session = getattr(sub_app.state, "session", None)
+                if not session:
+                    raise HTTPException(
+                        status_code=503,
+                        detail="Health check failed: MCP session is not initialized",
+                    )
+                try:
+                    await session.list_tools()
+                except Exception as e:
+                    raise HTTPException(
+                        status_code=503,
+                        detail=f"Health check failed: MCP backend is unhealthy: {e}",
+                    ) from e
+
+            return {"status": "ok"}
+
+        # single-server mode: check main app session
+        session = getattr(main_app.state, "session", None)
+        if session:
+            try:
+                await session.list_tools()
+            except Exception as e:
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"Health check failed: MCP backend is unhealthy: {e}",
+                ) from e
+
+        return {"status": "ok"}
 
     main_app.add_middleware(
         CORSMiddleware,
