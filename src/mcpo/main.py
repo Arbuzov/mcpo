@@ -220,14 +220,14 @@ async def run(
             for route in mounted_routes:
                 sub_app = route.app
                 app_name = route.path
-                
+
                 session = getattr(sub_app.state, "session", None)
-                if not session:
+                if session is None:
                     raise HTTPException(
                         status_code=503,
                         detail=f"Health check failed for mounted app '{app_name}': MCP session is not initialized",
                     )
-                
+
                 try:
                     await asyncio.wait_for(session.list_tools(), timeout=2)
                 except Exception as e:
@@ -240,7 +240,7 @@ async def run(
 
         # single-server mode: check main app session
         session = getattr(main_app.state, "session", None)
-        if not session:
+        if session is None:
             raise HTTPException(
                 status_code=503,
                 detail="Health check failed: MCP session is not initialized",
